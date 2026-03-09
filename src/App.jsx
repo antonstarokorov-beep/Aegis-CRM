@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, doc, addDoc, updateDoc } from 'firebase/firestore';
 import { 
   LayoutDashboard, 
   FileText, 
   CreditCard, 
   Scale, 
-  Settings, 
   Bell, 
   Search,
   Plus,
@@ -16,7 +18,6 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle2,
-  Clock,
   Wallet,
   UploadCloud,
   FileSpreadsheet,
@@ -29,30 +30,41 @@ import {
   UserCircle,
   BarChart3,
   CalendarClock,
-  Gavel,
   MailOpen,
   Lock,
   Server,
-  Shield
+  Shield,
+  Users,
+  MessageSquare,
+  Phone,
+  Send,
+  Bot
 } from 'lucide-react';
 
-// Умный компонент логотипа
+// ==========================================
+// FIREBASE ИНИЦИАЛИЗАЦИЯ
+// ==========================================
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
+const auth = app ? getAuth(app) : null;
+const db = app ? getFirestore(app) : null;
+const globalAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+// ==========================================
+// ЛОГОТИП 
+// ==========================================
 const AegisLogo = ({ size = 'large' }) => {
   const [imgError, setImgError] = useState(false);
-
-  // Пытаемся загрузить пользовательский файл logo-a-1.png
   if (!imgError) {
     return (
       <img 
         src="logo-a-1.png" 
         alt="ИДЖИС" 
         className={`${size === 'large' ? 'h-20 mb-4' : 'h-10'} mx-auto object-contain transition-all`}
-        onError={() => setImgError(true)} // Если файла нет, переключаемся на заглушку
+        onError={() => setImgError(true)} 
       />
     );
   }
-
-  // Временная векторная заглушка (если картинки нет в папке)
   return (
     <div className={`flex items-center justify-center gap-3 ${size === 'large' ? 'mb-2 mt-4' : ''}`}>
       <div className="relative flex items-center justify-center">
@@ -67,12 +79,35 @@ const AegisLogo = ({ size = 'large' }) => {
   );
 };
 
+// ==========================================
+// ГЛАВНОЕ ПРИЛОЖЕНИЕ
+// ==========================================
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [userRole, setUserRole] = useState('admin');
+  const [fbUser, setFbUser] = useState(null);
 
-  // Глобальное состояние
+  // Авторизация Firebase
+  useEffect(() => {
+    if (!auth) return;
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (e) {
+        console.error("Ошибка авторизации Firebase:", e);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => setFbUser(u));
+    return () => unsubscribe();
+  }, []);
+
+  // Локальные мок-данные (Договоры, Оплаты, АУ)
   const [contracts, setContracts] = useState([
     { id: '1411-ФЛ', date: '2024-11-01', clientName: 'Иванов Иван Иванович', phone: '+7 (999) 111-22-33', passport: '4210 123456 выдан УМВД по г. Кемерово', totalAmount: 200000, paidAmount: 80000, status: 'Активен', nextPaymentDate: '2025-03-05', lastContact: null, monthlyPayment: 20000, currentMonthPaid: 0 },
     { id: '1412-ФЛ', date: '2025-01-15', clientName: 'Смирнов Алексей Викторович', phone: '+7 (900) 000-00-00', passport: '4212 654321 выдан ГУ МВД по КО', totalAmount: 150000, paidAmount: 150000, status: 'Исполнен', nextPaymentDate: null, lastContact: null, monthlyPayment: 20000, currentMonthPaid: 20000 },
@@ -103,7 +138,6 @@ export default function App() {
             <div className="absolute top-4 right-4 flex items-center gap-1 text-[10px] uppercase font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-1 rounded">
               <ShieldCheck size={12} /> TLS 1.3 Secure
             </div>
-            {/* Здесь загрузится логотип */}
             <AegisLogo size="large" />
             <p className="text-slate-500 text-sm mt-2 font-medium">Корпоративный защищенный портал</p>
           </div>
@@ -143,6 +177,7 @@ export default function App() {
         
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
           <NavItem icon={<LayoutDashboard size={20} />} label="Рабочий стол" isActive={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+          <NavItem icon={<MessageSquare size={20} />} label="Чаты ИИ (Лиды)" isActive={activeTab === 'chats'} onClick={() => setActiveTab('chats')} />
           <NavItem icon={<FileText size={20} />} label="Договоры" isActive={activeTab === 'contracts'} onClick={() => setActiveTab('contracts')} />
           <NavItem icon={<CreditCard size={20} />} label="Оплаты (БФЛ)" isActive={activeTab === 'payments'} onClick={() => setActiveTab('payments')} />
           <div className="pt-4 pb-2"><p className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-3">Арбитражный управляющий</p></div>
@@ -177,6 +212,7 @@ export default function App() {
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shadow-sm z-10 shrink-0">
           <h1 className="text-2xl font-semibold text-slate-800">
             {activeTab === 'dashboard' && 'Сводка показателей'}
+            {activeTab === 'chats' && 'Входящие лиды из Telegram'}
             {activeTab === 'contracts' && 'Управление договорами'}
             {activeTab === 'payments' && 'Контроль платежей по БФЛ'}
             {activeTab === 'au' && 'Контроль вознаграждений АУ'}
@@ -193,8 +229,9 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto bg-slate-50 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto bg-slate-50 custom-scrollbar relative">
           {activeTab === 'dashboard' && <DashboardModule contracts={contracts} paymentsHistory={paymentsHistory} auCases={auCases} onNavigate={setActiveTab} userRole={userRole} />}
+          {activeTab === 'chats' && <ChatModule db={db} appId={globalAppId} fbUser={fbUser} />}
           {activeTab === 'contracts' && <ContractsModule contracts={contracts} setContracts={setContracts} userRole={userRole} />}
           {activeTab === 'payments' && <PaymentsModule contracts={contracts} setContracts={setContracts} paymentsHistory={paymentsHistory} setPaymentsHistory={setPaymentsHistory} userRole={userRole} />}
           {activeTab === 'au' && <AuModule cases={auCases} setCases={setAuCases} userRole={userRole} />}
@@ -202,6 +239,214 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+// ==========================================
+// MODULE: ЧАТЫ (LEADS) - ИНТЕГРАЦИЯ
+// ==========================================
+function ChatModule({ db, appId, fbUser }) {
+    const [leads, setLeads] = useState([]);
+    const [allMessages, setAllMessages] = useState([]);
+    const [selectedLeadId, setSelectedLeadId] = useState(null);
+    const [operatorInput, setOperatorInput] = useState('');
+    const [dbError, setDbError] = useState(false);
+    
+    const messagesEndRef = useRef(null);
+
+    // Подписка на данные из Firebase
+    useEffect(() => {
+        if (!db || !appId || !fbUser) return;
+
+        try {
+            const leadsRef = collection(db, 'artifacts', appId, 'public', 'data', 'leads');
+            const messagesRef = collection(db, 'artifacts', appId, 'public', 'data', 'messages');
+
+            const unsubLeads = onSnapshot(leadsRef, (snapshot) => {
+                const fetchedLeads = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setLeads(fetchedLeads.sort((a, b) => b.createdAt - a.createdAt));
+            }, (error) => {
+                console.error("Ошибка чтения leads:", error);
+                setDbError(true);
+            });
+
+            const unsubMessages = onSnapshot(messagesRef, (snapshot) => {
+                const fetchedMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setAllMessages(fetchedMessages.sort((a, b) => a.timestamp - b.timestamp));
+            }, (error) => {
+                console.error("Ошибка чтения messages:", error);
+                setDbError(true);
+            });
+
+            return () => { unsubLeads(); unsubMessages(); };
+        } catch (e) {
+            console.error("Сбой инициализации чатов:", e);
+            setDbError(true);
+        }
+    }, [db, appId, fbUser]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [selectedLeadId, allMessages]);
+
+    const getChatMessages = (chatId) => allMessages.filter(m => m.chatId === chatId.toString());
+
+    const handleOperatorSend = async (e) => {
+        e.preventDefault();
+        if (!operatorInput.trim() || !selectedLeadId || !db || !fbUser) return;
+
+        const messageText = operatorInput.trim();
+        setOperatorInput('');
+
+        try {
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'leads', selectedLeadId), {
+                status: 'operator_active'
+            });
+
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
+                chatId: selectedLeadId.toString(),
+                sender: 'operator',
+                text: messageText,
+                timestamp: Date.now()
+            });
+        } catch(e) {
+            console.error("Ошибка отправки:", e);
+        }
+    };
+
+    if (dbError) {
+        return (
+            <div className="p-8 h-full flex flex-col items-center justify-center text-slate-500">
+                <AlertCircle size={48} className="text-red-400 mb-4" />
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Ошибка подключения к базе данных</h2>
+                <p>Убедитесь, что конфигурация Firebase настроена корректно.</p>
+            </div>
+        );
+    }
+
+    const activeLead = leads.find(l => l.id === selectedLeadId);
+    const crmMessages = selectedLeadId ? getChatMessages(selectedLeadId) : [];
+
+    return (
+        <div className="absolute inset-0 p-8">
+            <div className="flex h-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                {/* СПИСОК ЛИДОВ */}
+                <div className="w-1/3 min-w-[300px] bg-slate-50 border-r border-slate-200 flex flex-col">
+                    <div className="p-4 bg-slate-800 text-white flex items-center space-x-2 shrink-0">
+                        <Users size={18} className="text-blue-400" />
+                        <h2 className="font-semibold">Воронка: Telegram ИИ</h2>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                        {leads.length === 0 ? (
+                            <div className="text-center text-slate-400 mt-10 text-sm flex flex-col items-center">
+                                <Bot size={32} className="opacity-20 mb-2" />
+                                Ожидаем новые диалоги...
+                            </div>
+                        ) : (
+                            leads.map(lead => (
+                                <div 
+                                    key={lead.id} 
+                                    onClick={() => setSelectedLeadId(lead.id)}
+                                    className={`p-3 rounded-xl border cursor-pointer transition-all ${selectedLeadId === lead.id ? 'bg-white border-blue-400 shadow-md ring-1 ring-blue-400/20' : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-sm'}`}
+                                >
+                                    <div className="flex justify-between items-start mb-1.5">
+                                        <div className="font-bold text-slate-800 text-sm truncate pr-2">{lead.name || 'Новый клиент'}</div>
+                                        <div className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${lead.status === 'operator_active' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}`}>
+                                            {lead.status === 'operator_active' ? 'В работе' : 'ИИ общается'}
+                                        </div>
+                                    </div>
+                                    <div className="text-xs text-slate-600 font-medium mb-1.5 flex items-center gap-1">
+                                        <Phone size={12} className="text-slate-400"/> {lead.phone || 'Телефон не получен'}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100">{lead.summary ? lead.summary.replace(/\n/g, ' ') : 'Анализирую...'}</div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* ОКНО ЧАТА */}
+                <div className="flex-1 flex flex-col relative bg-slate-50">
+                    {activeLead ? (
+                        <>
+                            {/* Шапка чата и AI-Резюме */}
+                            <div className="p-5 bg-white border-b border-slate-200 shadow-sm z-10 shrink-0">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h2 className="font-bold text-xl text-[#1a2b4c]">{activeLead.name || 'Без имени'}</h2>
+                                        <div className="flex space-x-4 text-sm text-slate-500 mt-1.5">
+                                            <span className="flex items-center gap-1.5"><Phone size={16} className="text-blue-500"/> {activeLead.phone || 'Не указан'}</span>
+                                            <span className="flex items-center gap-1.5"><UserCircle size={16} className="text-slate-400"/> @{activeLead.username || 'Скрыт'}</span>
+                                        </div>
+                                    </div>
+                                    <button className="bg-[#1a2b4c] hover:bg-[#111e36] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                                        + Создать договор
+                                    </button>
+                                </div>
+                                
+                                {activeLead.summary && (
+                                    <div className="mt-4 bg-amber-50/80 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 relative">
+                                        <div className="absolute -top-3 left-4 bg-amber-400 text-amber-900 text-[10px] font-black px-2.5 py-0.5 rounded shadow-sm uppercase tracking-wider flex items-center">
+                                            <Bot size={12} className="mr-1.5" /> Резюме от ИИ
+                                        </div>
+                                        <div className="mt-1 whitespace-pre-wrap leading-relaxed">{activeLead.summary}</div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Сообщения */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                                {crmMessages.map(msg => (
+                                    <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-start' : 'justify-end'}`}>
+                                        <div className={`max-w-[80%] p-3.5 rounded-2xl text-[13px] leading-relaxed shadow-sm ${
+                                            msg.sender === 'user' 
+                                                ? 'bg-white border border-slate-200 text-slate-800 rounded-bl-none' 
+                                                : msg.sender === 'operator' 
+                                                    ? 'bg-green-600 text-white rounded-br-none' 
+                                                    : 'bg-[#1a2b4c] text-white rounded-br-none' 
+                                        }`}>
+                                            <div className="text-[10px] opacity-75 mb-1.5 font-bold uppercase tracking-wider">
+                                                {msg.sender === 'user' ? 'Клиент' : msg.sender === 'operator' ? 'Вы (Юрист)' : 'AI Ассистент'}
+                                            </div>
+                                            {msg.text}
+                                        </div>
+                                    </div>
+                                ))}
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {/* Поле ввода */}
+                            <div className="p-4 bg-white border-t border-slate-200 shrink-0">
+                                {activeLead.status !== 'operator_active' && (
+                                    <div className="mb-3 text-xs text-amber-700 flex items-center justify-center bg-amber-50 p-2.5 rounded-lg border border-amber-200 font-medium">
+                                        <AlertCircle size={16} className="mr-2 text-amber-500" />
+                                        Отправив сообщение, вы отключите бота и перехватите диалог на себя.
+                                    </div>
+                                )}
+                                <form onSubmit={handleOperatorSend} className="flex space-x-3">
+                                    <input 
+                                        type="text" 
+                                        value={operatorInput}
+                                        onChange={(e) => setOperatorInput(e.target.value)}
+                                        placeholder="Написать клиенту в Telegram..." 
+                                        className="flex-1 px-5 py-3 border border-slate-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm"
+                                    />
+                                    <button type="submit" disabled={!operatorInput.trim()} className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl flex items-center justify-center disabled:opacity-50 transition-colors shadow-sm min-w-[56px]">
+                                        <Send size={20} className="ml-1" />
+                                    </button>
+                                </form>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-white">
+                            <MessageSquare size={64} className="mb-6 opacity-20 text-[#1a2b4c]" />
+                            <h3 className="text-xl font-bold text-slate-700 mb-2">Выберите диалог</h3>
+                            <p className="text-sm">Нажмите на карточку клиента слева, чтобы прочитать переписку.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 }
 
 // ==========================================
