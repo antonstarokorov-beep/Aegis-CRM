@@ -19,13 +19,15 @@ import {
 const getFirebaseConfig = () => {
   try {
     const rawConfig = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+    if (!rawConfig) return null;
     return typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;
   } catch (e) { return null; }
 };
 
 const firebaseConfig = getFirebaseConfig();
+// Очистка appId от любых спецсимволов и слешей, чтобы не ломать сегменты путей Firestore
 const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'aegis-crm-prod';
-const appId = rawAppId.replace(/\//g, '_'); // Очистка для Firestore
+const appId = rawAppId.replace(/[^a-zA-Z0-9]/g, '_'); 
 
 const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : null;
@@ -73,18 +75,19 @@ export default function App() {
     if (!auth) return;
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+        const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        if (token) {
+          await signInWithCustomToken(auth, token);
         } else {
           await signInAnonymously(auth);
         }
-      } catch (e) { /* silent */ }
+      } catch (e) { /* silent fail for build */ }
     };
     initAuth();
     return onAuthStateChanged(auth, setFbUser);
   }, []);
 
-  // Глобальное состояние данных
+  // Состояние данных
   const [contracts, setContracts] = useState([
     { id: '1411-ФЛ', date: '2024-11-01', clientName: 'Иванов Иван Иванович', phone: '+7 (999) 111-22-33', passport: '4210 123456', totalAmount: 200000, paidAmount: 80000, status: 'Активен', nextPaymentDate: '2025-03-05', monthlyPayment: 20000, currentMonthPaid: 0 },
     { id: '1414-ФЛ', date: '2024-12-10', clientName: 'Петров Петр Петрович', phone: '+7 (905) 123-45-67', passport: '4215 112233', totalAmount: 245000, paidAmount: 50000, status: 'Активен', nextPaymentDate: '2025-03-28', monthlyPayment: 25000, currentMonthPaid: 10000 }, 
@@ -106,7 +109,7 @@ export default function App() {
           <div className="space-y-4 mt-8">
             <input type="text" defaultValue="admin@aegis.ru" className="w-full p-3 bg-slate-50 border rounded-lg outline-none" placeholder="Логин" />
             <input type="password" defaultValue="********" className="w-full p-3 bg-slate-50 border rounded-lg outline-none" placeholder="Пароль" />
-            <button onClick={() => setIsAuthenticated(true)} className="w-full bg-[#1a2b4c] text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2">
+            <button onClick={() => setIsAuthenticated(true)} className="w-full bg-[#1a2b4c] text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors hover:bg-[#111e36]">
               Войти в систему <ArrowRight size={18} />
             </button>
           </div>
@@ -192,13 +195,21 @@ function ChatModule({ db, appId, user }) {
     e.preventDefault();
     if (!input.trim() || !selectedId) return;
     const text = input; setInput('');
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'leads', selectedId), { status: 'operator_active' });
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
-      chatId: String(selectedId), sender: 'operator', text, timestamp: Date.now()
-    });
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'leads', selectedId), { status: 'operator_active' });
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), {
+        chatId: String(selectedId), sender: 'operator', text, timestamp: Date.now()
+      });
+    } catch (err) { console.error("Error sending message:", err); }
   };
 
   const activeLead = leads.find(l => String(l.id) === String(selectedId));
+
+  const safeRender = (val) => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'object') return JSON.stringify(val);
+    return String(val);
+  };
 
   return (
     <div className="absolute inset-0 p-6 flex gap-6">
@@ -210,9 +221,9 @@ function ChatModule({ db, appId, user }) {
         <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
           {leads.map(l => (
             <div key={l.id} onClick={() => setSelectedId(l.id)} className={`p-3 rounded-lg border cursor-pointer transition-all ${selectedId === l.id ? 'border-blue-500 bg-blue-50' : 'hover:bg-slate-50 border-transparent'}`}>
-              <div className="font-bold text-sm text-slate-800 truncate pr-4 text-left">{String(l.name || 'Клиент')}</div>
+              <div className="font-bold text-sm text-slate-800 truncate pr-4 text-left">{safeRender(l.name || 'Клиент')}</div>
               <div className="flex justify-between items-center mt-1">
-                <div className="text-[9px] text-slate-400 font-bold uppercase">@{String(l.username || 'user')}</div>
+                <div className="text-[9px] text-slate-400 font-bold uppercase">@{safeRender(l.username || 'user')}</div>
                 <div className={`w-2 h-2 rounded-full ${l.status === 'operator_active' ? 'bg-green-500' : 'bg-amber-400 animate-pulse'}`}></div>
               </div>
             </div>
@@ -224,15 +235,15 @@ function ChatModule({ db, appId, user }) {
       <div className="flex-1 bg-white border rounded-xl flex flex-col shadow-sm overflow-hidden">
         {selectedId ? (
           <>
-            <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
-               <div className="font-bold text-slate-800">{String(activeLead?.name || 'Без имени')} <span className="text-slate-400 font-normal ml-2">ID: {String(selectedId)}</span></div>
-               {activeLead?.phone && <div className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 flex items-center gap-2"><Phone size={14}/> {String(activeLead.phone)}</div>}
+            <div className="p-4 border-b bg-slate-50 flex justify-between items-center shrink-0">
+               <div className="font-bold text-slate-800 text-left">{safeRender(activeLead?.name || 'Без имени')} <span className="text-slate-400 font-normal ml-2">ID: {safeRender(selectedId)}</span></div>
+               {activeLead?.phone && <div className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 flex items-center gap-2"><Phone size={14}/> {safeRender(activeLead.phone)}</div>}
             </div>
             
             {activeLead?.summary && (
-              <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed shadow-inner text-left">
+              <div className="mx-6 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed shadow-inner text-left shrink-0">
                 <div className="font-black mb-1 flex items-center gap-2 uppercase tracking-tighter"><Bot size={14}/> Резюме диалога от ИИ:</div>
-                {String(activeLead.summary)}
+                {safeRender(activeLead.summary)}
               </div>
             )}
 
@@ -241,14 +252,14 @@ function ChatModule({ db, appId, user }) {
                 <div key={m.id} className={`flex ${m.sender === 'user' ? 'justify-start' : 'justify-end'}`}>
                   <div className={`max-w-[75%] p-3 rounded-2xl text-[13px] shadow-sm text-left ${m.sender === 'user' ? 'bg-white border text-slate-800 rounded-bl-none' : 'bg-[#1a2b4c] text-white rounded-br-none'}`}>
                     <div className="text-[9px] opacity-50 mb-1 font-black uppercase tracking-tighter">{m.sender === 'user' ? 'КЛИЕНТ' : m.sender === 'operator' ? 'ВЫ (ЮРИСТ)' : 'AI АССИСТЕНТ'}</div>
-                    <div className="whitespace-pre-wrap">{String(m.text || '')}</div>
+                    <div className="whitespace-pre-wrap">{safeRender(m.text || '')}</div>
                   </div>
                 </div>
               ))}
               <div ref={endRef} />
             </div>
             
-            <form onSubmit={sendMessage} className="p-4 border-t bg-slate-50 flex gap-2">
+            <form onSubmit={sendMessage} className="p-4 border-t bg-slate-50 flex gap-2 shrink-0">
               <input value={input} onChange={e => setInput(e.target.value)} className="flex-1 p-3 bg-white border rounded-xl outline-none shadow-sm focus:border-blue-500 transition-all text-sm" placeholder="Введите ваш ответ для отправки в Telegram..." />
               <button className="bg-blue-600 hover:bg-blue-700 text-white w-12 h-12 rounded-xl flex items-center justify-center transition-colors shadow-md"><Send size={20}/></button>
             </form>
@@ -302,7 +313,7 @@ function DashboardModule({ contracts, payments, auCases }) {
           <div className="space-y-3">
              {contracts.filter(c => c.status === 'Активен').slice(0, 4).map(c => (
                <div key={c.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
-                  <div>
+                  <div className="text-left">
                     <div className="text-sm font-bold text-slate-800">{String(c.clientName)}</div>
                     <div className="text-[10px] text-slate-500">Оплата до: {String(c.nextPaymentDate)}</div>
                   </div>
@@ -331,11 +342,11 @@ function ContractsModule({ contracts, setContracts, userRole }) {
         <button onClick={() => setView('create')} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"><Plus size={18} /> Создать договор</button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col min-h-0">
         {view === 'list' && (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto flex-1 custom-scrollbar">
             <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50">
+              <thead className="bg-slate-50 sticky top-0">
                 <tr className="border-b border-slate-200 text-[10px] text-slate-500 uppercase tracking-widest font-bold">
                   <th className="p-4">№ / Дата</th>
                   <th className="p-4">Клиент</th>
@@ -372,7 +383,8 @@ function ContractsModule({ contracts, setContracts, userRole }) {
 
         {view === 'view' && selected && (
           <div className="p-8 overflow-y-auto custom-scrollbar flex-1 bg-slate-200">
-            <div className="max-w-[210mm] mx-auto bg-white p-20 shadow-xl text-left text-black font-serif text-[11pt] leading-relaxed">
+            <div className="max-w-[210mm] mx-auto bg-white p-20 shadow-xl text-left text-black font-serif text-[11pt] leading-relaxed relative">
+               <button onClick={() => setView('list')} className="absolute top-4 right-4 text-slate-400 hover:text-slate-800 no-print">×</button>
                <div className="flex justify-between mb-8 font-bold"><div>г. Кемерово</div><div>{String(selected.date)} г.</div></div>
                <h3 className="text-center font-bold text-[14pt] mb-8 uppercase">Договор №{String(selected.id)}<br/>на оказание юридических услуг</h3>
                <p className="mb-4 text-justify">ИП Бондарь И.И., именуемый в дальнейшем "Исполнитель", с одной стороны, и <strong>{String(selected.clientName)}</strong>, именуемый(ая) в дальнейшем "Заказчик", заключили настоящий договор о нижеследующем...</p>
@@ -410,24 +422,26 @@ function PaymentsModule({ contracts, setContracts, history, setHistory, userRole
         <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm text-sm"><Plus size={16}/> Принять оплату</button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col min-h-0">
         {tab === 'active' && (
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b">
-              <tr className="text-[10px] font-bold text-slate-500 uppercase p-4"><th className="p-4">Клиент</th><th className="p-4">Срок оплаты</th><th className="p-4">Сумма за месяц</th><th className="p-4">Статус</th><th className="p-4 text-right">Действие</th></tr>
-            </thead>
-            <tbody className="divide-y text-sm">
-               {contracts.filter(c => c.status === 'Активен').map(c => (
-                 <tr key={c.id} className="hover:bg-slate-50">
-                   <td className="p-4 font-bold">{String(c.clientName)}</td>
-                   <td className="p-4 text-red-600 font-bold">{String(c.nextPaymentDate)}</td>
-                   <td className="p-4 font-bold text-slate-700">{formatCurrency(c.monthlyPayment)}</td>
-                   <td className="p-4"><span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded">Просрочено</span></td>
-                   <td className="p-4 text-right"><button className="text-blue-600 hover:underline font-bold text-xs flex items-center gap-1 justify-end"><PhoneCall size={14}/> Напомнить</button></td>
-                 </tr>
-               ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto flex-1 custom-scrollbar">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 border-b sticky top-0">
+                <tr className="text-[10px] font-bold text-slate-500 uppercase p-4"><th className="p-4">Клиент</th><th className="p-4">Срок оплаты</th><th className="p-4">Сумма за месяц</th><th className="p-4">Статус</th><th className="p-4 text-right">Действие</th></tr>
+              </thead>
+              <tbody className="divide-y text-sm">
+                 {contracts.filter(c => c.status === 'Активен').map(c => (
+                   <tr key={c.id} className="hover:bg-slate-50">
+                     <td className="p-4 font-bold">{String(c.clientName)}</td>
+                     <td className="p-4 text-red-600 font-bold">{String(c.nextPaymentDate)}</td>
+                     <td className="p-4 font-bold text-slate-700">{formatCurrency(c.monthlyPayment)}</td>
+                     <td className="p-4"><span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded">Просрочено</span></td>
+                     <td className="p-4 text-right"><button className="text-blue-600 hover:underline font-bold text-xs flex items-center gap-1 justify-end"><PhoneCall size={14}/> Напомнить</button></td>
+                   </tr>
+                 ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {tab === 'history' && (
           <div className="p-8 text-center text-slate-400 italic">Здесь отображается история всех принятых платежей...</div>
@@ -454,40 +468,42 @@ function AuModule({ cases, setCases, userRole }) {
         <button className="bg-[#1a2b4c] text-white px-4 py-2 rounded-lg font-bold text-sm">Добавить дело АУ</button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col min-h-0">
         {tab === 'list' && (
-           <table className="w-full text-left border-collapse">
-             <thead className="bg-slate-50 border-b">
-               <tr className="text-[10px] font-bold text-slate-500 uppercase"><th className="p-4">Дело / Должник</th><th className="p-4">Суд</th><th className="p-4">Этап</th><th className="p-4">Контроль</th><th className="p-4 text-right">Сумма</th></tr>
-             </thead>
-             <tbody className="divide-y text-sm">
-                {cases.map(c => (
-                  <tr key={c.id} className="hover:bg-slate-50">
-                    <td className="p-4 font-bold text-slate-800">{String(c.id)}<br/><span className="font-normal text-slate-500">{String(c.debtor)}</span></td>
-                    <td className="p-4 text-slate-500">{String(c.court)}</td>
-                    <td className="p-4"><span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-[10px] font-bold">{String(c.stage)}</span></td>
-                    <td className="p-4 font-bold text-red-600 italic">{String(c.nextActionDate)}</td>
-                    <td className="p-4 text-right font-bold">{formatCurrency(c.amount)}</td>
-                  </tr>
-                ))}
-             </tbody>
-           </table>
+           <div className="overflow-x-auto flex-1 custom-scrollbar">
+             <table className="w-full text-left border-collapse">
+               <thead className="bg-slate-50 border-b sticky top-0">
+                 <tr className="text-[10px] font-bold text-slate-500 uppercase"><th className="p-4">Дело / Должник</th><th className="p-4">Суд</th><th className="p-4">Этап</th><th className="p-4">Контроль</th><th className="p-4 text-right">Сумма</th></tr>
+               </thead>
+               <tbody className="divide-y text-sm">
+                  {cases.map(c => (
+                    <tr key={c.id} className="hover:bg-slate-50">
+                      <td className="p-4 font-bold text-slate-800">{String(c.id)}<br/><span className="font-normal text-slate-500">{String(c.debtor)}</span></td>
+                      <td className="p-4 text-slate-500">{String(c.court)}</td>
+                      <td className="p-4"><span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-[10px] font-bold">{String(c.stage)}</span></td>
+                      <td className="p-4 font-bold text-red-600 italic">{String(c.nextActionDate)}</td>
+                      <td className="p-4 text-right font-bold">{formatCurrency(c.amount)}</td>
+                    </tr>
+                  ))}
+               </tbody>
+             </table>
+           </div>
         )}
         {tab === 'recon' && (
-          <div className="flex h-full divide-x">
+          <div className="flex h-full divide-x flex-1">
              <div className="w-1/2 p-6 flex flex-col gap-4">
                 <h4 className="font-bold text-slate-800">Загрузка банковской выписки</h4>
-                <div className="border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-xl p-10 text-center flex flex-col items-center">
+                <div className="border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-xl p-10 text-center flex flex-col items-center shrink-0">
                    <UploadCloud size={48} className="text-blue-500 mb-4 opacity-50"/>
                    <span className="text-sm font-bold text-blue-900">Перетащите PDF или XLS выписку</span>
                    <span className="text-[10px] text-slate-400 mt-2">CRM автоматически найдет номера дел в назначении платежа</span>
                 </div>
                 <textarea className="flex-1 border rounded-lg p-3 text-xs outline-none focus:ring-1" placeholder="Или вставьте текст выписки сюда..."></textarea>
-                <button className="bg-blue-600 text-white py-3 rounded-lg font-bold">Распознать платежи</button>
+                <button className="bg-blue-600 text-white py-3 rounded-lg font-bold shrink-0">Распознать платежи</button>
              </div>
-             <div className="w-1/2 p-6 bg-slate-50">
+             <div className="w-1/2 p-6 bg-slate-50 flex flex-col">
                 <h4 className="font-bold text-slate-800 mb-4">Результаты сверки</h4>
-                <div className="flex flex-col items-center justify-center h-64 text-slate-300">
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
                    <FileSpreadsheet size={64} className="opacity-10 mb-4"/>
                    <p className="text-sm italic">Ожидание данных для анализа...</p>
                 </div>
@@ -507,10 +523,10 @@ function StatCard({ icon, label, value, trend }) {
     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-left">
       <div className="flex justify-between items-start mb-4">
         <div className="p-2 bg-slate-50 rounded-lg">{icon}</div>
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{String(trend)}</div>
+        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{String(trend || '')}</div>
       </div>
-      <div className="text-slate-500 text-xs font-bold uppercase mb-1">{String(label)}</div>
-      <div className="text-2xl font-black text-slate-800">{String(value)}</div>
+      <div className="text-slate-500 text-xs font-bold uppercase mb-1">{String(label || '')}</div>
+      <div className="text-2xl font-black text-slate-800">{String(value || '')}</div>
     </div>
   );
 }
@@ -519,7 +535,7 @@ function NavItem({ icon, label, active, onClick }) {
   return (
     <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all group ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
       <div className={`${active ? 'text-white' : 'text-slate-500 group-hover:text-blue-400'}`}>{icon}</div>
-      <span className="text-sm">{String(label)}</span>
+      <span className="text-sm">{String(label || '')}</span>
     </button>
   );
 }
