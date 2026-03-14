@@ -69,18 +69,39 @@ const DIRECTIONS = ['БФЛ', 'Семейное право', 'Корпорати
 const INCOME_CATEGORIES = ['БФЛ', 'Семейное право', 'Корпоративное право', 'Банкротство ЮЛ', 'Лизинг', 'Абонентское обслуживание', 'АУ', 'Судебные расходы', 'Взыскание с ответчика', 'Прочее'];
 const EXPENSE_CATEGORIES = ['Зарплата', 'Аренда', 'Реклама', 'Подрядчики', 'Госпошлины', 'Публикации', 'Почта', 'Связь', 'Сервисы', 'Налоги', 'Прочее'];
 
-const AegisLogo = ({ size = 'large' }) => (
-  <div className={`flex items-center justify-center gap-3 ${size === 'large' ? 'mb-2 mt-4' : ''}`}>
-    <div className="relative flex items-center justify-center">
-      <Shield className="text-[#1a2b4c]" size={size === 'large' ? 46 : 32} strokeWidth={2} fill="#eab308" />
-      <Scale className="absolute text-[#1a2b4c]" size={size === 'large' ? 24 : 16} strokeWidth={2.5} />
+// === НАСТРОЙКИ API (ДЛЯ РЕАЛЬНОГО ПОИСКА БЕЗ ЗАГЛУШЕК) ===
+// Зарегистрируйтесь бесплатно на dadata.ru, получите API-ключ и вставьте сюда:
+const DADATA_API_KEY = "e69c0a7c7a75e278a4c1016e6a7e2124f5156632"; 
+
+const AegisLogo = ({ size = 'large' }) => {
+  const [imgError, setImgError] = useState(false);
+
+  // Пытаемся загрузить пользовательский файл logo-a-1.png
+  if (!imgError) {
+    return (
+      <img 
+        src="logo-a-1.png" 
+        alt="ИДЖИС" 
+        className={`${size === 'large' ? 'h-20 mb-4' : 'h-10'} mx-auto object-contain transition-all`}
+        onError={() => setImgError(true)} 
+      />
+    );
+  }
+
+  // Если файла нет, переключаемся на резервную иконку
+  return (
+    <div className={`flex items-center justify-center gap-3 ${size === 'large' ? 'mb-2 mt-4' : ''}`}>
+      <div className="relative flex items-center justify-center">
+        <Shield className="text-[#1a2b4c]" size={size === 'large' ? 46 : 32} strokeWidth={2} fill="#eab308" />
+        <Scale className="absolute text-[#1a2b4c]" size={size === 'large' ? 24 : 16} strokeWidth={2.5} />
+      </div>
+      <div className="flex flex-col items-start leading-none">
+        <span className={`${size === 'large' ? 'text-4xl' : 'text-2xl'} font-black text-[#1a2b4c] tracking-widest uppercase`}>ИДЖИС</span>
+        <span className={`${size === 'large' ? 'text-[11px]' : 'text-[8px]'} font-bold text-slate-500 uppercase tracking-[0.25em] mt-1.5`}>Правовая защита</span>
+      </div>
     </div>
-    <div className="flex flex-col items-start leading-none">
-      <span className={`${size === 'large' ? 'text-4xl' : 'text-2xl'} font-black text-[#1a2b4c] tracking-widest uppercase`}>ИДЖИС</span>
-      <span className={`${size === 'large' ? 'text-[11px]' : 'text-[8px]'} font-bold text-slate-500 uppercase tracking-[0.25em] mt-1.5`}>Правовая защита</span>
-    </div>
-  </div>
-);
+  );
+};
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -701,9 +722,15 @@ function FinanceViewModal({ op, onClose, onSave, onDelete, onRequestCorrection, 
 // ==========================================
 // MODULE: CONTRACTS
 // ==========================================
+const defaultContractTemplates = {
+  'БФЛ': 'ДОГОВОР №{{id}}\nоказания юридических услуг\n\nг. Кемерово\n\nИндивидуальный предприниматель Бондарь И.И., именуемый в дальнейшем "Исполнитель", и {{clientName}}, именуемый(ая) в дальнейшем "Заказчик", заключили настоящий договор.\n\nПРЕДМЕТ ДОГОВОРА:\nИсполнитель обязуется оказать юридические услуги по направлению: {{direction}}. Ответственный юрист: {{executor}}.\n\nДАННЫЕ ЗАКАЗЧИКА:\nПаспорт: {{passport}}\nАдрес: {{address}}\nТелефон: {{phone}}\n\nПОРЯДОК ОПЛАТЫ:\nОбщая сумма по договору составляет {{totalAmount}}.\nЗаказчик вносит первоначальный взнос в размере {{initialPayment}}.\nОставшаяся сумма оплачивается в рассрочку на {{installmentPeriod}} мес. Ежемесячный платеж составляет: {{monthlyPayment}}.\n\nПОДПИСИ СТОРОН:\nИсполнитель ____________ / Бондарь И.И. /\nЗаказчик ____________ / {{clientName}} /',
+  'Абонентское обслуживание': 'ДОГОВОР №{{id}}\nабонентского юридического обслуживания\n\nг. Кемерово\n\nИндивидуальный предприниматель Бондарь И.И., именуемый в дальнейшем "Исполнитель", и {{clientName}}, именуемый в дальнейшем "Заказчик", заключили настоящий договор.\n\nПРЕДМЕТ ДОГОВОРА:\nИсполнитель обязуется оказывать комплексное юридическое обслуживание (направление: {{direction}}). Ответственный юрист: {{executor}}.\n\nРЕКВИЗИТЫ ЗАКАЗЧИКА:\n{{passport}}\nЮридический адрес: {{address}}\nТелефон: {{phone}}\n\nПОРЯДОК ОПЛАТЫ:\nАбонентская плата составляет {{monthlyPayment}} ежемесячно.\nОплата производится не позднее 5-го числа каждого месяца.\n\nПОДПИСИ СТОРОН:\nИсполнитель ____________ / Бондарь И.И. /\nЗаказчик ____________ / {{clientName}} /',
+};
+
 function ContractsModule({ contracts, setContracts, user, allContracts }) {
   const [view, setView] = useState('list');
   const [selectedContract, setSelectedContract] = useState(null);
+  const [templates, setTemplates] = useLocalStorage('aegis_contract_templates', defaultContractTemplates);
   
   const handleCreateContract = (newContract) => { 
     setContracts([{ ...newContract, status: 'Активен', paidAmount: 0, lastContact: null, currentMonthPaid: 0 }, ...allContracts]); 
@@ -716,7 +743,10 @@ function ContractsModule({ contracts, setContracts, user, allContracts }) {
         <>
           <div className="flex justify-between items-center mb-6 shrink-0">
             <div><h2 className="text-2xl font-bold text-slate-800">Реестр договоров и клиентов</h2><p className="text-sm text-slate-500 mt-1 flex items-center gap-1"><Lock size={12} className="text-green-600"/> ПДн защищены в соответствии с ФЗ-152</p></div>
-            <button onClick={() => setView('create')} className="bg-[#1a2b4c] hover:bg-[#111e36] text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"><Plus size={18} /> Новый договор</button>
+            <div className="flex gap-3">
+              <button onClick={() => setView('templates')} className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"><FileText size={18} /> Шаблоны</button>
+              <button onClick={() => setView('create')} className="bg-[#1a2b4c] hover:bg-[#111e36] text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"><Plus size={18} /> Новый договор</button>
+            </div>
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden relative">
             <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
@@ -752,34 +782,130 @@ function ContractsModule({ contracts, setContracts, user, allContracts }) {
         </>
       )}
       {view === 'create' && <CreateContractForm onCancel={() => setView('list')} onSubmit={handleCreateContract} user={user} />}
-      {view === 'view' && selectedContract && <ContractViewer contract={selectedContract} onBack={() => setView('list')} />}
+      {view === 'view' && selectedContract && <ContractViewer contract={selectedContract} onBack={() => setView('list')} templates={templates} />}
+      {view === 'templates' && <TemplatesManager templates={templates} setTemplates={setTemplates} onBack={() => setView('list')} />}
     </div>
   );
 }
 
 function CreateContractForm({ onCancel, onSubmit, user }) {
   const defaultDirection = user.role === 'admin' ? 'БФЛ' : user.direction;
+  
+  // ИСПРАВЛЕНИЕ: Добавлено поле monthlyPayment, чтобы избежать ошибки uncontrolled input в React
   const [formData, setFormData] = useState({ 
     type: 'individual', direction: defaultDirection, executor: user.name, 
     clientName: '', phone: '', passport: '', address: '', 
     id: `14${Math.floor(Math.random() * 1000)}-ФЛ`, date: getTodayString(), 
-    totalAmount: 200000, initialPayment: 20000, installmentPeriod: 9 
+    totalAmount: 200000, initialPayment: 20000, installmentPeriod: 9,
+    monthlyPayment: '' 
   });
+  
   const [isScanning, setIsScanning] = useState(false);
+  const [isSearchingInn, setIsSearchingInn] = useState(false);
+  const [innSearch, setInnSearch] = useState('');
 
-  const handleScanSimulation = (e) => {
+  const handleRealScan = async (e) => {
     if(!e.target.files.length) return;
+    const file = e.target.files[0];
     setIsScanning(true);
-    setTimeout(() => {
+    try {
+      let text = '';
+      if (file.type === 'application/pdf') {
+        // Реальное чтение текста из PDF
+        if (!window.pdfjsLib) {
+          await new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+            script.onload = () => {
+              window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+              resolve();
+            };
+            document.body.appendChild(script);
+          });
+        }
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          text += textContent.items.map(item => item.str).join(' ') + '\n';
+        }
+      } else if (file.type.startsWith('image/')) {
+        // Реальное чтение текста с картинки (Tesseract OCR)
+        if (!window.Tesseract) {
+          await new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+            script.onload = resolve;
+            document.body.appendChild(script);
+          });
+        }
+        const worker = await window.Tesseract.createWorker('rus');
+        const result = await worker.recognize(file);
+        await worker.terminate();
+        text = result.data.text;
+      }
+
+      // Пытаемся вытащить паспортые данные с помощью регулярных выражений
+      const passportMatch = text.match(/\d{4}\s*\d{6}/);
+      const fmsMatch = text.match(/ВЫДАН\s+([А-ЯЁ\s.-]+)/i);
+
       setFormData(prev => ({
         ...prev,
-        clientName: 'Смирнов Константин Игоревич',
-        passport: '4215 987654 выдан ОУФМС Заводского р-на г. Кемерово',
-        address: 'г. Кемерово, ул. Ленина, д. 40, кв. 12',
-        phone: '+7 (900) 123-45-67'
+        passport: passportMatch ? `${passportMatch[0]} ${fmsMatch ? 'выдан ' + fmsMatch[1].trim() : ''}` : text.substring(0, 100),
+        clientName: 'Проверьте ФИО (Распознано с ошибками)',
+        address: 'Внесите адрес вручную (найдено: ' + text.substring(0, 30) + '...)'
       }));
+      alert('Файл обработан! Пожалуйста, проверьте и скорректируйте распознанные данные. Для 100% точности автораспределения полей требуется коммерческое API.');
+
+    } catch (error) {
+      alert('Ошибка при распознавании файла: ' + error.message);
+    } finally {
       setIsScanning(false);
-    }, 1500);
+    }
+  };
+
+  const handleEgrulReal = async () => {
+    if (!innSearch) return alert('Введите ИНН для поиска');
+    setIsSearchingInn(true);
+    try {
+      if (!DADATA_API_KEY) {
+        alert('ВНИМАНИЕ: API-ключ DaData не указан. Зарегистрируйтесь на dadata.ru (это бесплатно) и вставьте ключ в константу DADATA_API_KEY в начале кода.');
+        setIsSearchingInn(false);
+        return;
+      }
+
+      // Реальный запрос к ФНС/ЕГРЮЛ через DaData
+      const res = await fetch("https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Authorization": "Token " + DADATA_API_KEY
+        },
+        body: JSON.stringify({ query: innSearch })
+      });
+      
+      if (!res.ok) throw new Error('Ошибка соединения с DaData. Проверьте валидность API-ключа.');
+      
+      const data = await res.json();
+      if (data.suggestions && data.suggestions.length > 0) {
+        const company = data.suggestions[0].data;
+        setFormData(prev => ({
+          ...prev,
+          clientName: company.name.full_with_opf || data.suggestions[0].value,
+          address: company.address.value,
+          passport: `ИНН ${company.inn} / ОГРН ${company.ogrn}`,
+          phone: company.phones ? company.phones.join(', ') : ''
+        }));
+      } else {
+        alert('Компания по такому ИНН не найдена в ЕГРЮЛ');
+      }
+    } catch (error) {
+      alert('Сбой при запросе: ' + error.message);
+    } finally {
+      setIsSearchingInn(false);
+    }
   };
 
   const handleCalculateAndSubmit = (e) => {
@@ -800,7 +926,7 @@ function CreateContractForm({ onCancel, onSubmit, user }) {
     <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-8 w-full">
       <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">
         <button onClick={onCancel} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"><ChevronLeft size={24} /></button>
-        <div><h2 className="text-2xl font-bold">Оформление нового клиента</h2><p className="text-sm text-slate-500">Система поддерживает автозаполнение по скану паспорта.</p></div>
+        <div><h2 className="text-2xl font-bold">Оформление нового клиента</h2><p className="text-sm text-slate-500">Поддерживается автозаполнение данных (Паспорт / ЕГРЮЛ).</p></div>
       </div>
       
       <form onSubmit={handleCalculateAndSubmit} className="space-y-6">
@@ -823,14 +949,31 @@ function CreateContractForm({ onCancel, onSubmit, user }) {
            <div><label className="text-xs font-bold text-slate-500 uppercase">Ответственный юрист</label><input type="text" className="w-full p-2.5 mt-1 bg-white border border-slate-300 rounded-lg outline-none" value={formData.executor} onChange={e => setFormData({...formData, executor: e.target.value})} /></div>
         </div>
 
-        {formData.type === 'individual' && (
+        {formData.type === 'individual' ? (
           <div className="border-2 border-dashed border-blue-200 bg-blue-50/50 p-6 rounded-xl flex items-center justify-center relative hover:bg-blue-50 transition-colors cursor-pointer">
-            <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleScanSimulation} />
+            <input type="file" accept=".pdf, image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={handleRealScan} />
             <div className="text-center">
               {isScanning ? (
-                 <div className="flex flex-col items-center text-blue-600"><Loader2 className="animate-spin mb-2" size={32}/><p className="font-medium">Распознавание паспорта...</p></div>
+                 <div className="flex flex-col items-center text-blue-600"><Loader2 className="animate-spin mb-2" size={32}/><p className="font-medium">Анализ документа...</p></div>
               ) : (
-                 <div className="flex flex-col items-center text-blue-600"><ScanFace size={32} className="mb-2 opacity-80"/><p className="font-medium">Загрузить скан паспорта (разворот + прописка)</p><p className="text-xs text-blue-500/80 mt-1">Данные заполнятся автоматически</p></div>
+                 <div className="flex flex-col items-center text-blue-600"><ScanFace size={32} className="mb-2 opacity-80"/><p className="font-medium">Загрузить скан паспорта (PDF или Фото)</p><p className="text-xs text-blue-500/80 mt-1">Реальное чтение текста</p></div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-6 rounded-xl flex items-center justify-center relative hover:bg-indigo-50 transition-colors">
+            <div className="w-full text-center">
+              {isSearchingInn ? (
+                 <div className="flex flex-col items-center text-indigo-600"><Loader2 className="animate-spin mb-2" size={32}/><p className="font-medium">Реальный запрос в ЕГРЮЛ...</p></div>
+              ) : (
+                 <div className="flex flex-col items-center text-indigo-600">
+                    <Server size={32} className="mb-2 opacity-80"/>
+                    <p className="font-medium mb-3">Данные из ЕГРЮЛ (Интеграция)</p>
+                    <div className="flex gap-2 max-w-sm mx-auto w-full z-10 relative">
+                       <input type="text" placeholder="Введите ИНН..." className="flex-1 p-2 rounded-lg border border-indigo-200 outline-none text-sm text-slate-800" value={innSearch} onChange={e => setInnSearch(e.target.value)} />
+                       <button type="button" onClick={handleEgrulReal} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors">Найти</button>
+                    </div>
+                 </div>
               )}
             </div>
           </div>
@@ -867,15 +1010,70 @@ function CreateContractForm({ onCancel, onSubmit, user }) {
   );
 }
 
-function ContractViewer({ contract, onBack }) {
+function TemplatesManager({ templates, setTemplates, onBack }) {
+  const [activeDir, setActiveDir] = useState(DIRECTIONS[0]);
+  const [text, setText] = useState(templates[DIRECTIONS[0]] || '');
+
+  useEffect(() => {
+    setText(templates[activeDir] || '');
+  }, [activeDir, templates]);
+
+  const handleSave = () => {
+    setTemplates(prev => ({ ...prev, [activeDir]: text }));
+    alert('Шаблон успешно сохранен!');
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-8 flex flex-col h-[85vh] w-full">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4 shrink-0">
+         <div className="flex items-center gap-4">
+           <button onClick={onBack} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"><ChevronLeft size={24} /></button>
+           <div>
+             <h2 className="text-2xl font-bold text-slate-800">Шаблоны договоров</h2>
+             <p className="text-xs text-slate-500 mt-1">Настройте стандартные тексты для каждого направления. <br/>Переменные для вставки: <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">{`{{clientName}}, {{passport}}, {{totalAmount}}, {{monthlyPayment}}, {{direction}}, {{executor}}`}</span></p>
+           </div>
+         </div>
+         <button onClick={handleSave} className="bg-[#1a2b4c] hover:bg-[#111e36] text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors"><CheckCircle2 size={18}/> Сохранить</button>
+      </div>
+      <div className="flex gap-6 flex-1 min-h-0">
+         <div className="w-1/4 overflow-y-auto border-r border-slate-100 pr-4 space-y-2 custom-scrollbar">
+            {DIRECTIONS.map(d => (
+               <button key={d} onClick={() => setActiveDir(d)} className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeDir === d ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'hover:bg-slate-50 text-slate-600'}`}>{d}</button>
+            ))}
+         </div>
+         <div className="flex-1 flex flex-col">
+            <textarea className="flex-1 w-full p-6 border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 rounded-xl resize-none outline-none font-serif text-[11pt] leading-relaxed custom-scrollbar shadow-inner" value={text} onChange={e => setText(e.target.value)} placeholder={`Введите текст шаблона для направления "${activeDir}"...`} />
+         </div>
+      </div>
+    </div>
+  );
+}
+
+function ContractViewer({ contract, onBack, templates }) {
+  const defaultDirTemplate = contract.type === 'corporate' ? templates['Абонентское обслуживание'] : templates['БФЛ'];
+  const tpl = templates[contract.direction] || defaultDirTemplate || 'ДОГОВОР №{{id}}\n\nЗаказчик: {{clientName}}\nПаспорт/ИНН: {{passport}}\nАдрес: {{address}}\n\nСумма по договору: {{totalAmount}} (взнос: {{initialPayment}}, рассрочка: {{installmentPeriod}} мес.) Ежемесячный платеж: {{monthlyPayment}}';
+  
+  const formatCurrencyStr = (amount) => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(amount || 0);
+
+  const compiledText = tpl
+    .replace(/{{id}}/g, contract.id)
+    .replace(/{{clientName}}/g, contract.clientName)
+    .replace(/{{direction}}/g, contract.direction)
+    .replace(/{{executor}}/g, contract.executor)
+    .replace(/{{passport}}/g, contract.passport)
+    .replace(/{{address}}/g, contract.address)
+    .replace(/{{phone}}/g, contract.phone)
+    .replace(/{{totalAmount}}/g, formatCurrencyStr(contract.totalAmount))
+    .replace(/{{initialPayment}}/g, formatCurrencyStr(contract.initialPayment))
+    .replace(/{{installmentPeriod}}/g, contract.installmentPeriod || '0')
+    .replace(/{{monthlyPayment}}/g, formatCurrencyStr(contract.monthlyPayment));
+
   return (
     <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-8rem)]">
-      <div className="flex items-center justify-between bg-white p-4 rounded-t-xl border border-slate-200 border-b-0 shrink-0"><div className="flex items-center gap-4"><button onClick={onBack} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded transition-colors"><ChevronLeft size={20} /></button><div><h3 className="font-bold">Договор №{contract.id}</h3></div></div></div>
+      <div className="flex items-center justify-between bg-white p-4 rounded-t-xl border border-slate-200 border-b-0 shrink-0"><div className="flex items-center gap-4"><button onClick={onBack} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded transition-colors"><ChevronLeft size={20} /></button><div><h3 className="font-bold">Предпросмотр договора №{contract.id}</h3></div></div><button className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2"><Printer size={16}/> Печать</button></div>
       <div className="flex-1 overflow-y-auto bg-slate-200 p-8 border border-slate-200 rounded-b-xl custom-scrollbar">
-        <div className="max-w-[210mm] mx-auto bg-white shadow-lg p-[20mm] text-[11pt] font-serif leading-relaxed text-black">
-          <h1 className="text-center font-bold text-[14pt] mb-8">ДОГОВОР №{contract.id}<br/>оказания юридических услуг</h1>
-          <p className="text-justify indent-8 mb-6">ИП Бондарь И.И. и <strong>{contract.clientName}</strong> заключили договор. Направление: {contract.direction}. Исполнитель: {contract.executor}.</p>
-          <p className="mb-4"><strong>Условия:</strong> {contract.type === 'corporate' ? `Ежемесячно ${formatCurrency(contract.monthlyPayment)}` : `Сумма: ${formatCurrency(contract.totalAmount)}, взнос: ${formatCurrency(contract.initialPayment)}, рассрочка: ${contract.installmentPeriod} мес.`}</p>
+        <div className="max-w-[210mm] mx-auto bg-white shadow-lg p-[20mm] text-[11pt] font-serif leading-relaxed text-black whitespace-pre-wrap break-words">
+          {compiledText}
         </div>
       </div>
     </div>
@@ -1122,21 +1320,54 @@ function AuReconciliation({ pendingCases, onConfirmPayment }) {
   const [matched, setMatched] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleFileUpload = (e) => {
+  const handleRealFileUpload = async (e) => {
     if(!e.target.files.length) return;
+    const file = e.target.files[0];
     setIsProcessing(true);
-    // Имитация распознавания PDF выписки из банка
-    setTimeout(() => {
-      const mockParsedText = "ВЫПИСКА ИЗ ЛИЦЕВОГО СЧЕТА СБЕРБАНК\nДата: 14.03.2025\nПлательщик: Арбитражный суд г. Москвы\nНазначение: Перечисление с депозита по делу А40-12345/2023 должник Петров В.В.\nСумма: 25000.00 RUB\n\nПлательщик: Арбитражный суд КО\nНазначение: Возврат депозита А27-9999/2024\nСумма: 25000.00 RUB";
-      setInputText(mockParsedText);
-      setIsProcessing(false);
+    
+    try {
+      let parsedText = '';
+      if (file.type === 'application/pdf') {
+        // Подключаем реальный PDF.js парсер без бекенда
+        if (!window.pdfjsLib) {
+          await new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+            script.onload = () => {
+              window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+              resolve();
+            };
+            document.body.appendChild(script);
+          });
+        }
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          parsedText += textContent.items.map(item => item.str).join(' ') + '\n';
+        }
+      } else {
+        parsedText = await file.text();
+      }
+
+      setInputText(parsedText);
       
       const res = []; 
       pendingCases.forEach(c => { 
-        if (mockParsedText.includes(c.id)) res.push({...c, actualAmount: c.amount}); 
+        // Реальный поиск номера дела в тексте документа
+        // Ищем совпадения (учитывая, что дефисы или слэши могут иногда распознаваться как пробелы)
+        if (parsedText.includes(c.id) || parsedText.replace(/-/g, '').includes(c.id.replace(/-/g, ''))) {
+           res.push({...c, actualAmount: c.amount}); 
+        }
       }); 
       setMatched(res);
-    }, 2000);
+
+    } catch (error) {
+       alert('Не удалось прочитать PDF: ' + error.message);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -1145,15 +1376,15 @@ function AuReconciliation({ pendingCases, onConfirmPayment }) {
         <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><FileUp/> Загрузка выписки банка</h3>
         
         <div className="relative border-2 border-dashed border-slate-300 hover:border-blue-400 bg-white rounded-xl p-10 flex flex-col items-center justify-center transition-colors mb-4 group">
-          <input type="file" accept=".pdf,.txt" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"/>
+          <input type="file" accept=".pdf,.txt" onChange={handleRealFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"/>
           {isProcessing ? (
              <div className="text-center text-blue-600"><Loader2 className="animate-spin mb-4 mx-auto" size={40}/><p className="font-medium">Извлекаем текст из документа...</p></div>
           ) : (
-             <div className="text-center text-slate-400 group-hover:text-blue-500 transition-colors"><UploadCloud size={48} className="mb-4 mx-auto"/><p className="font-medium text-slate-600 mb-1">Перетащите PDF файл сюда</p><p className="text-xs">или нажмите для выбора файла</p></div>
+             <div className="text-center text-slate-400 group-hover:text-blue-500 transition-colors"><UploadCloud size={48} className="mb-4 mx-auto"/><p className="font-medium text-slate-600 mb-1">Перетащите реальный PDF выписки сюда</p><p className="text-xs">или нажмите для выбора файла</p></div>
           )}
         </div>
 
-        <textarea className="flex-1 w-full p-4 border border-slate-200 rounded-lg resize-none text-xs font-mono bg-white text-slate-600 outline-none" value={inputText} readOnly placeholder="Здесь появится распознанный текст банковской выписки..."></textarea>
+        <textarea className="flex-1 w-full p-4 border border-slate-200 rounded-lg resize-none text-xs font-mono bg-white text-slate-600 outline-none" value={inputText} readOnly placeholder="Здесь появится реально распознанный текст банковской выписки..."></textarea>
       </div>
       <div className="w-1/2 p-8 flex flex-col bg-white overflow-auto">
         <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2"><CheckCircle2 className="text-green-500"/> Найденные совпадения ({matched.length})</h3>
