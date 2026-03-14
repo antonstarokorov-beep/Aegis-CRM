@@ -846,17 +846,44 @@ function CreateContractForm({ onCancel, onSubmit, user }) {
         text = result.data.text;
       }
 
-      // Пытаемся вытащить паспортые данные с помощью регулярных выражений
-      const passportMatch = text.match(/\d{4}\s*\d{6}/);
-      const fmsMatch = text.match(/ВЫДАН\s+([А-ЯЁ\s.-]+)/i);
+      // Улучшенный парсинг паспорта РФ
+      const cleanText = text.replace(/\n/g, ' ').replace(/\s+/g, ' ');
+      
+      // 1. Серия и номер
+      const passportMatch = cleanText.match(/(\d{2}\s*\d{2})\s*(\d{6})/);
+      
+      // 2. Кем выдан
+      let issuedBy = '';
+      const fmsMatch = cleanText.match(/(?:выдан\s+)?((?:ГУ МВД|УМВД|ОВД|МВД)[А-ЯЁа-яё\s.-]+?)(?:Дата выдачи|\d{2}\.\d{2}|код|$)/i);
+      if (fmsMatch) issuedBy = fmsMatch[1].trim();
+
+      // 3. ФИО (Ищем по маркерам "Фамилия" или три слова подряд ЗАГЛАВНЫМИ)
+      let parsedClientName = '';
+      const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+      
+      const lastNameMatch = cleanText.match(/Фамилия\s*([А-ЯЁ]{3,})/i);
+      const firstMidNameMatch = cleanText.match(/([А-ЯЁ]{3,})\s+([А-ЯЁ]+(ВИЧ|ВНА|ИЧ|НА))/i);
+      
+      if (lastNameMatch && firstMidNameMatch) {
+          parsedClientName = `${capitalize(lastNameMatch[1])} ${capitalize(firstMidNameMatch[1])} ${capitalize(firstMidNameMatch[2])}`;
+      } else {
+          const fioMatch = cleanText.match(/([А-ЯЁ]{3,})\s+([А-ЯЁ]{3,})\s+([А-ЯЁ]+(ВИЧ|ВНА|ИЧ|НА))/i);
+          if (fioMatch) parsedClientName = `${capitalize(fioMatch[1])} ${capitalize(fioMatch[2])} ${capitalize(fioMatch[3])}`;
+      }
+
+      // 4. Адрес прописки
+      let parsedAddress = '';
+      const addressMatch = cleanText.match(/ЗАРЕГИСТРИРОВАН\s*[\d\s]*(.*?)(?:УМВД|Отделом|ГУ МВД|Плание|Подпись|$)/i);
+      if (addressMatch) {
+          parsedAddress = addressMatch[1].replace(/Регком/ig, '').trim();
+      }
 
       setFormData(prev => ({
         ...prev,
-        passport: passportMatch ? `${passportMatch[0]} ${fmsMatch ? 'выдан ' + fmsMatch[1].trim() : ''}` : text.substring(0, 100),
-        clientName: 'Проверьте ФИО (Распознано с ошибками)',
-        address: 'Внесите адрес вручную (найдено: ' + text.substring(0, 30) + '...)'
+        passport: passportMatch ? `${passportMatch[1]} ${passportMatch[2]} ${issuedBy ? 'выдан ' + issuedBy : ''}`.trim() : prev.passport,
+        clientName: parsedClientName || prev.clientName,
+        address: parsedAddress || prev.address
       }));
-      alert('Файл обработан! Пожалуйста, проверьте и скорректируйте распознанные данные. Для 100% точности автораспределения полей требуется коммерческое API.');
 
     } catch (error) {
       alert('Ошибка при распознавании файла: ' + error.message);
